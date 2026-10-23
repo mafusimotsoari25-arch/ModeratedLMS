@@ -1,0 +1,8 @@
+build/
+cmake-build-*/
+*.exe
+*.o
+*.db
+*.db-wal
+*.db-shm
+.vscode/
