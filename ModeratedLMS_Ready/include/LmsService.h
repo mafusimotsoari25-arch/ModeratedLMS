@@ -12,6 +12,8 @@ public:
     explicit LmsService(Database& database);
     void seedDemoData();
     std::unique_ptr<User> login(const std::string& username, const std::string& password);
+    int registerStudent(const std::string& username, const std::string& password);
+    void enrolStudent(const User& actor, int studentId, int courseId);
     int createUser(const User& actor, const std::string& username,
                    const std::string& password, Role role);
     int createAssignment(const User& actor, int courseId, const std::string& title,

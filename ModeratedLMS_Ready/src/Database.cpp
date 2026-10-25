@@ -38,6 +38,13 @@ void Database::initialiseSchema() {
       department_id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL UNIQUE
     );
+    CREATE TABLE IF NOT EXISTS department_hods (
+      department_id INTEGER NOT NULL,
+      hod_user_id INTEGER NOT NULL,
+      PRIMARY KEY(department_id, hod_user_id),
+      FOREIGN KEY(department_id) REFERENCES departments(department_id),
+      FOREIGN KEY(hod_user_id) REFERENCES users(user_id)
+    );
     CREATE TABLE IF NOT EXISTS courses (
       course_id INTEGER PRIMARY KEY AUTOINCREMENT,
       department_id INTEGER NOT NULL,

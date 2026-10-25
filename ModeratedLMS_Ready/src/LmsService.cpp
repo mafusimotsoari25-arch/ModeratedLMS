@@ -99,6 +99,7 @@ void LmsService::seedDemoData() {
         sqlite3_bind_text(q.get(),3,u.role,-1,SQLITE_STATIC); q.done();
     }
     database_.execute("INSERT OR IGNORE INTO course_lecturers(course_id,lecturer_user_id) SELECT 1,user_id FROM users WHERE username='demo_lecturer';");
+    database_.execute("INSERT OR IGNORE INTO department_hods(department_id,hod_user_id) SELECT 1,user_id FROM users WHERE username='demo_hod';");
     database_.execute("INSERT OR IGNORE INTO enrolments(course_id,student_user_id,status) SELECT 1,user_id,'Active' FROM users WHERE username='demo_student';");
     database_.execute("INSERT OR IGNORE INTO assignments(assignment_id,course_id,title,deadline,max_mark) VALUES(1,1,'C++ Basics Assignment','2099-10-20 23:59:59',100);");
 }
@@ -112,6 +113,29 @@ std::unique_ptr<User> LmsService::login(const std::string& username, const std::
     if (!PasswordService::verifyPassword(hash,password)) throw std::runtime_error("Invalid username or password");
     return UserFactory::create(id,name,role);
 }
+int LmsService::registerStudent(const std::string& username, const std::string& password) {
+    if (username.empty() || username.find_first_of(" \t\r\n") != std::string::npos)
+        throw std::invalid_argument("Username must be non-empty and contain no spaces");
+    const auto hash = PasswordService::hashPassword(password);
+    Statement s(database_.handle(), "INSERT INTO users(username,password_hash,role) VALUES(?,?,'Student')");
+    sqlite3_bind_text(s.get(), 1, username.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(s.get(), 2, hash.c_str(), -1, SQLITE_TRANSIENT);
+    s.done();
+    return static_cast<int>(sqlite3_last_insert_rowid(database_.handle()));
+}
+
+void LmsService::enrolStudent(const User& actor, int studentId, int courseId) {
+    requireRole(actor, Role::Administrator);
+    Statement role(database_.handle(), "SELECT role FROM users WHERE user_id=? AND active=1");
+    sqlite3_bind_int(role.get(), 1, studentId);
+    if (sqlite3_step(role.get()) != SQLITE_ROW || columnText(role.get(), 0) != "Student")
+        throw std::runtime_error("Only an active student account can be enrolled");
+    Statement s(database_.handle(), "INSERT INTO enrolments(course_id,student_user_id,status) VALUES(?,?,'Active')");
+    sqlite3_bind_int(s.get(), 1, courseId);
+    sqlite3_bind_int(s.get(), 2, studentId);
+    s.done();
+}
+
 int LmsService::createUser(const User& actor, const std::string& username, const std::string& password, Role role) {
     requireRole(actor,Role::Administrator);
     if (username.empty() || username.find_first_of(" \t\r\n") != std::string::npos) throw std::invalid_argument("Username must be non-empty and contain no spaces");
@@ -154,7 +178,10 @@ int LmsService::submitAssignment(const User& actor,int assignmentId,const std::s
     const int id=static_cast<int>(sqlite3_last_insert_rowid(database_.handle()));
     Statement ver(database_.handle(),"INSERT INTO submission_versions(submission_id,version_number,content,submitted_at,is_late) VALUES(?,1,?,?,?)");
     sqlite3_bind_int(ver.get(),1,id); sqlite3_bind_text(ver.get(),2,content.c_str(),-1,SQLITE_TRANSIENT); sqlite3_bind_text(ver.get(),3,time.c_str(),-1,SQLITE_TRANSIENT); sqlite3_bind_int(ver.get(),4,late?1:0); ver.done();
-    notifications_.notifyUser(2,"A student submitted assignment ID "+std::to_string(assignmentId)+"."); return id;
+    Statement staff(database_.handle(), "SELECT cl.lecturer_user_id FROM course_lecturers cl JOIN assignments a ON a.course_id=cl.course_id WHERE a.assignment_id=?");
+    sqlite3_bind_int(staff.get(), 1, assignmentId);
+    while (sqlite3_step(staff.get()) == SQLITE_ROW) notifications_.notifyUser(sqlite3_column_int(staff.get(), 0), "A student submitted assignment ID " + std::to_string(assignmentId) + ".");
+    return id;
 }
 int LmsService::grantExtension(const User& actor,int assignmentId,int studentId,const std::string& revisedDeadline,const std::string& reason) {
     requireRole(actor,Role::Lecturer); if(revisedDeadline.size()<16 || reason.empty()) throw std::invalid_argument("A revised deadline and reason are required");
@@ -179,7 +206,10 @@ int LmsService::resubmitAssignment(const User& actor,int assignmentId,const std:
     sqlite3_bind_int(ver.get(),1,id); sqlite3_bind_int(ver.get(),2,current+1); sqlite3_bind_text(ver.get(),3,content.c_str(),-1,SQLITE_TRANSIENT); sqlite3_bind_text(ver.get(),4,time.c_str(),-1,SQLITE_TRANSIENT); ver.done();
     Statement upd(database_.handle(),"UPDATE submissions SET current_version=?,submitted_at=?,status='Submitted' WHERE submission_id=?");
     sqlite3_bind_int(upd.get(),1,current+1); sqlite3_bind_text(upd.get(),2,time.c_str(),-1,SQLITE_TRANSIENT); sqlite3_bind_int(upd.get(),3,id); upd.done();
-    notifications_.notifyUser(2,"A student resubmitted assignment ID "+std::to_string(assignmentId)+" (version "+std::to_string(current+1)+")."); return id;
+    Statement staff(database_.handle(), "SELECT cl.lecturer_user_id FROM course_lecturers cl JOIN assignments a ON a.course_id=cl.course_id WHERE a.assignment_id=?");
+    sqlite3_bind_int(staff.get(), 1, assignmentId);
+    while (sqlite3_step(staff.get()) == SQLITE_ROW) notifications_.notifyUser(sqlite3_column_int(staff.get(), 0), "A student resubmitted assignment ID " + std::to_string(assignmentId) + " (version " + std::to_string(current+1) + ").");
+    return id;
 }
 void LmsService::markSubmission(const User& actor,int submissionId,double rawMark,const std::string& feedback) {
     requireRole(actor,Role::Lecturer);
@@ -191,17 +221,23 @@ void LmsService::markSubmission(const User& actor,int submissionId,double rawMar
     const int daysLate=daysLateBetween(columnText(latest.get(),0),effectiveDeadline(assignmentId,studentId));
     const double finalMark=penalty_.finalMark(rawMark,maxMark,daysLate);
     Statement old(database_.handle(),"SELECT final_mark FROM marks WHERE submission_id=?"); sqlite3_bind_int(old.get(),1,submissionId); const bool hasOld=sqlite3_step(old.get())==SQLITE_ROW; const double oldMark=hasOld?sqlite3_column_double(old.get(),0):0;
-    Statement save(database_.handle(),"INSERT INTO marks(submission_id,raw_mark,final_mark,feedback,marked_by_user_id,released) VALUES(?,?,?,?,?,0) ON CONFLICT(submission_id) DO UPDATE SET raw_mark=excluded.raw_mark,final_mark=excluded.final_mark,feedback=excluded.feedback,marked_by_user_id=excluded.marked_by_user_id,moderated_by_user_id=NULL,released=0");
-    sqlite3_bind_int(save.get(),1,submissionId); sqlite3_bind_double(save.get(),2,rawMark); sqlite3_bind_double(save.get(),3,finalMark); sqlite3_bind_text(save.get(),4,feedback.c_str(),-1,SQLITE_TRANSIENT); sqlite3_bind_int(save.get(),5,actor.id()); save.done();
-    Statement status(database_.handle(),"UPDATE submissions SET status='Marked' WHERE submission_id=?"); sqlite3_bind_int(status.get(),1,submissionId); status.done();
-    audit_.recordMarkChange(submissionId,actor.id(),hasOld?std::optional<double>(oldMark):std::nullopt,finalMark,hasOld?"Mark updated by lecturer":"Initial marking");
+    database_.execute("BEGIN IMMEDIATE;");
+    try {
+        Statement save(database_.handle(),"INSERT INTO marks(submission_id,raw_mark,final_mark,feedback,marked_by_user_id,released) VALUES(?,?,?,?,?,0) ON CONFLICT(submission_id) DO UPDATE SET raw_mark=excluded.raw_mark,final_mark=excluded.final_mark,feedback=excluded.feedback,marked_by_user_id=excluded.marked_by_user_id,moderated_by_user_id=NULL,released=0");
+        sqlite3_bind_int(save.get(),1,submissionId); sqlite3_bind_double(save.get(),2,rawMark); sqlite3_bind_double(save.get(),3,finalMark); sqlite3_bind_text(save.get(),4,feedback.c_str(),-1,SQLITE_TRANSIENT); sqlite3_bind_int(save.get(),5,actor.id()); save.done();
+        Statement status(database_.handle(),"UPDATE submissions SET status='Marked' WHERE submission_id=?"); sqlite3_bind_int(status.get(),1,submissionId); status.done();
+        audit_.recordMarkChange(submissionId,actor.id(),hasOld?std::optional<double>(oldMark):std::nullopt,finalMark,hasOld?"Mark updated by lecturer":"Initial marking");
+        database_.execute("COMMIT;");
+    } catch (...) { try { database_.execute("ROLLBACK;"); } catch (...) {} throw; }
     notifications_.notifyUser(studentId,"Your assignment has been marked and is awaiting HoD moderation.");
-    notifications_.notifyUser(3,"A mark is awaiting moderation.");
+    Statement hods(database_.handle(), "SELECT dh.hod_user_id FROM department_hods dh JOIN courses c ON c.department_id=dh.department_id JOIN assignments a ON a.course_id=c.course_id WHERE a.assignment_id=?");
+    sqlite3_bind_int(hods.get(), 1, assignmentId);
+    while (sqlite3_step(hods.get()) == SQLITE_ROW) notifications_.notifyUser(sqlite3_column_int(hods.get(), 0), "A mark is awaiting moderation for submission " + std::to_string(submissionId) + ".");
 }
 void LmsService::moderateAndRelease(const User& actor,int submissionId,bool approve,const std::string& comments) {
     requireRole(actor,Role::HeadOfDepartment);
-    Statement s(database_.handle(),"SELECT m.final_mark,s.student_user_id FROM marks m JOIN submissions s ON s.submission_id=m.submission_id WHERE m.submission_id=? AND m.released=0 AND s.status='Marked'");
-    sqlite3_bind_int(s.get(),1,submissionId); if(sqlite3_step(s.get())!=SQLITE_ROW) throw std::runtime_error("No unmoderated mark exists for this submission"); const int student=sqlite3_column_int(s.get(),1);
+    Statement s(database_.handle(),"SELECT m.final_mark,s.student_user_id FROM marks m JOIN submissions s ON s.submission_id=m.submission_id JOIN assignments a ON a.assignment_id=s.assignment_id JOIN courses c ON c.course_id=a.course_id JOIN department_hods dh ON dh.department_id=c.department_id WHERE m.submission_id=? AND dh.hod_user_id=? AND m.released=0 AND s.status='Marked'");
+    sqlite3_bind_int(s.get(),1,submissionId); sqlite3_bind_int(s.get(),2,actor.id()); if(sqlite3_step(s.get())!=SQLITE_ROW) throw std::runtime_error("No unmoderated mark exists in your department for this submission"); const int student=sqlite3_column_int(s.get(),1);
     if(!approve) { Statement reset(database_.handle(),"UPDATE submissions SET status='Submitted' WHERE submission_id=?"); sqlite3_bind_int(reset.get(),1,submissionId); reset.done(); notifications_.notifyUser(student,"Your mark was returned for lecturer review. "+comments); return; }
     Statement m(database_.handle(),"UPDATE marks SET moderated_by_user_id=?,released=1 WHERE submission_id=?"); sqlite3_bind_int(m.get(),1,actor.id()); sqlite3_bind_int(m.get(),2,submissionId); m.done();
     Statement st(database_.handle(),"UPDATE submissions SET status='Released' WHERE submission_id=?"); sqlite3_bind_int(st.get(),1,submissionId); st.done();
@@ -211,16 +247,27 @@ void LmsService::changeMark(const User& actor,int submissionId,double newRawMark
     requireRole(actor,Role::Lecturer); if(reason.empty()) throw std::invalid_argument("A reason is required for a mark change");
     Statement q(database_.handle(),"SELECT a.max_mark,m.final_mark,s.student_user_id FROM marks m JOIN submissions s ON s.submission_id=m.submission_id JOIN assignments a ON a.assignment_id=s.assignment_id JOIN course_lecturers cl ON cl.course_id=a.course_id WHERE s.submission_id=? AND cl.lecturer_user_id=? AND m.released=0");
     sqlite3_bind_int(q.get(),1,submissionId); sqlite3_bind_int(q.get(),2,actor.id()); if(sqlite3_step(q.get())!=SQLITE_ROW) throw std::runtime_error("Mark not found, already released, or not your course");
-    const double max=sqlite3_column_double(q.get(),0), old=sqlite3_column_double(q.get(),1); const int student=sqlite3_column_int(q.get(),2); const double final=penalty_.finalMark(newRawMark,max,0);
-    Statement u(database_.handle(),"UPDATE marks SET raw_mark=?,final_mark=?,moderated_by_user_id=NULL,released=0 WHERE submission_id=?"); sqlite3_bind_double(u.get(),1,newRawMark); sqlite3_bind_double(u.get(),2,final); sqlite3_bind_int(u.get(),3,submissionId); u.done();
-    audit_.recordMarkChange(submissionId,actor.id(),old,final,reason); notifications_.notifyUser(student,"Your mark was updated and must be moderated again.");
+    const double max=sqlite3_column_double(q.get(),0), old=sqlite3_column_double(q.get(),1); const int student=sqlite3_column_int(q.get(),2);
+    Statement timing(database_.handle(), "SELECT s.assignment_id,s.student_user_id,v.submitted_at FROM submissions s JOIN submission_versions v ON v.submission_id=s.submission_id AND v.version_number=s.current_version WHERE s.submission_id=?");
+    sqlite3_bind_int(timing.get(),1,submissionId); if(sqlite3_step(timing.get())!=SQLITE_ROW) throw std::runtime_error("Current submission version not found");
+    const int assignmentId=sqlite3_column_int(timing.get(),0), studentId=sqlite3_column_int(timing.get(),1);
+    const int daysLate=daysLateBetween(columnText(timing.get(),2),effectiveDeadline(assignmentId,studentId));
+    const double final=penalty_.finalMark(newRawMark,max,daysLate);
+    database_.execute("BEGIN IMMEDIATE;");
+    try {
+        Statement u(database_.handle(),"UPDATE marks SET raw_mark=?,final_mark=?,moderated_by_user_id=NULL,released=0 WHERE submission_id=?"); sqlite3_bind_double(u.get(),1,newRawMark); sqlite3_bind_double(u.get(),2,final); sqlite3_bind_int(u.get(),3,submissionId); u.done();
+        audit_.recordMarkChange(submissionId,actor.id(),old,final,reason);
+        database_.execute("COMMIT;");
+    } catch (...) { try { database_.execute("ROLLBACK;"); } catch (...) {} throw; }
+    notifications_.notifyUser(student,"Your mark was updated and must be moderated again.");
 }
 void LmsService::showStudentMarks(const User& actor) {
     requireRole(actor,Role::Student); Statement s(database_.handle(),"SELECT a.title,m.final_mark,m.feedback FROM marks m JOIN submissions sub ON sub.submission_id=m.submission_id JOIN assignments a ON a.assignment_id=sub.assignment_id WHERE sub.student_user_id=? AND m.released=1 ORDER BY a.title"); sqlite3_bind_int(s.get(),1,actor.id());
     std::cout<<"\nReleased marks:\n"; bool any=false; while(sqlite3_step(s.get())==SQLITE_ROW){any=true;std::cout<<"- "<<columnText(s.get(),0)<<": "<<sqlite3_column_double(s.get(),1)<<" | "<<columnText(s.get(),2)<<"\n";} if(!any)std::cout<<"No marks released yet.\n";
 }
 void LmsService::showPendingModeration(const User& actor) {
-    requireRole(actor,Role::HeadOfDepartment); Statement s(database_.handle(),"SELECT sub.submission_id,a.title,u.username,m.final_mark FROM marks m JOIN submissions sub ON sub.submission_id=m.submission_id JOIN assignments a ON a.assignment_id=sub.assignment_id JOIN users u ON u.user_id=sub.student_user_id WHERE m.released=0 AND sub.status='Marked' ORDER BY sub.submission_id");
+    requireRole(actor,Role::HeadOfDepartment); Statement s(database_.handle(),"SELECT sub.submission_id,a.title,u.username,m.final_mark FROM marks m JOIN submissions sub ON sub.submission_id=m.submission_id JOIN assignments a ON a.assignment_id=sub.assignment_id JOIN courses c ON c.course_id=a.course_id JOIN department_hods dh ON dh.department_id=c.department_id JOIN users u ON u.user_id=sub.student_user_id WHERE dh.hod_user_id=? AND m.released=0 AND sub.status='Marked' ORDER BY sub.submission_id");
+    sqlite3_bind_int(s.get(),1,actor.id());
     std::cout<<"\nMarks awaiting moderation:\n"; bool any=false; while(sqlite3_step(s.get())==SQLITE_ROW){any=true;std::cout<<"Submission "<<sqlite3_column_int(s.get(),0)<<" | "<<columnText(s.get(),1)<<" | student "<<columnText(s.get(),2)<<" | mark "<<sqlite3_column_double(s.get(),3)<<"\n";} if(!any)std::cout<<"None.\n";
 }
 void LmsService::showAssignments(const User& actor) {
@@ -237,7 +284,9 @@ void LmsService::runDemonstration() {
               << "Student: demo_student / Student123!\nLecturer: demo_lecturer / Lecturer123!\n"
               << "HoD: demo_hod / Hod123456!\nAdmin: demo_admin / Admin123456!\n";
     for (;;) {
-        std::cout << "\n1 Login  0 Exit\nChoice: "; int choice; if(!(std::cin>>choice)) return; if(choice==0)return; if(choice!=1){std::cout<<"Invalid choice.\n";continue;}
+        std::cout << "\n1 Login  2 Register student account  0 Exit\nChoice: "; int choice; if(!(std::cin>>choice)) return; if(choice==0)return;
+        if(choice==2) { std::string username,password; std::cout<<"Choose username (no spaces): ";std::cin>>username;std::cout<<"Choose password (at least 8 characters): ";std::cin>>password; try { int id=registerStudent(username,password); std::cout<<"Student account created. Your user ID is "<<id<<". An administrator must enrol you in a course before you can submit assignments.\n"; } catch(const std::exception& e) { std::cout<<"Registration failed: "<<e.what()<<"\n"; } continue; }
+        if(choice!=1){std::cout<<"Invalid choice.\n";continue;}
         std::string username,password; std::cout<<"Username: ";std::cin>>username;std::cout<<"Password: ";std::cin>>password;
         try {
             auto user=login(username,password); std::cout<<"Welcome "<<user->username()<<" ("<<user->roleName()<<")\n";
@@ -245,7 +294,7 @@ void LmsService::runDemonstration() {
                 if(user->role()==Role::Student) std::cout<<"1 List assignments  2 Submit  3 Resubmit  4 View released marks  5 Notifications  0 Logout\n";
                 else if(user->role()==Role::Lecturer) std::cout<<"1 List assignments  2 Grant extension  3 Mark submission  4 Create assignment  5 Notifications  0 Logout\n";
                 else if(user->role()==Role::HeadOfDepartment) std::cout<<"1 Pending moderation  2 Approve/release  3 Notifications  0 Logout\n";
-                else std::cout<<"1 Create user  2 Notifications  0 Logout\n";
+                else std::cout<<"1 Create user  2 Notifications  3 Enrol student  0 Logout\n";
                 std::cout<<"Choice: "; int c; if(!(std::cin>>c))return; if(c==0){logout=true;continue;}
                 try {
                     if(user->role()==Role::Student){
@@ -255,7 +304,7 @@ void LmsService::runDemonstration() {
                     } else if(user->role()==Role::HeadOfDepartment){
                         if(c==1)showPendingModeration(*user);else if(c==2){int sid;char yes;std::string comments;std::cout<<"Submission ID: ";std::cin>>sid;std::cout<<"Approve and release? (y/n): ";std::cin>>yes;std::cout<<"Comments (one token, or -): ";std::cin>>comments;moderateAndRelease(*user,sid,yes=='y'||yes=='Y',comments=="-"?"":comments);std::cout<<"Moderation decision saved.\n";}else if(c==3)showNotifications(*user);else std::cout<<"Invalid choice.\n";
                     } else {
-                        if(c==1){std::string name,pass;int r;std::cout<<"New username: ";std::cin>>name;std::cout<<"New password (8+ chars): ";std::cin>>pass;std::cout<<"Role 1 Student 2 Lecturer 3 HoD 4 Admin: ";std::cin>>r;if(r<1||r>4)throw std::invalid_argument("Invalid role number");Role role= r==1?Role::Student:r==2?Role::Lecturer:r==3?Role::HeadOfDepartment:Role::Administrator;std::cout<<"Created user ID "<<createUser(*user,name,pass,role)<<"\n";}else if(c==2)showNotifications(*user);else std::cout<<"Invalid choice.\n";
+                        if(c==1){std::string name,pass;int r;std::cout<<"New username: ";std::cin>>name;std::cout<<"New password (8+ chars): ";std::cin>>pass;std::cout<<"Role 1 Student 2 Lecturer 3 HoD 4 Admin: ";std::cin>>r;if(r<1||r>4)throw std::invalid_argument("Invalid role number");Role role= r==1?Role::Student:r==2?Role::Lecturer:r==3?Role::HeadOfDepartment:Role::Administrator;std::cout<<"Created user ID "<<createUser(*user,name,pass,role)<<"\n";}else if(c==2)showNotifications(*user);else if(c==3){int sid,cid;std::cout<<"Student user ID: ";std::cin>>sid;std::cout<<"Course ID: ";std::cin>>cid;enrolStudent(*user,sid,cid);std::cout<<"Student enrolled.\n";}else std::cout<<"Invalid choice.\n";
                     }
                 } catch(const std::exception& e){std::cout<<"Action failed: "<<e.what()<<"\n";}
             }
