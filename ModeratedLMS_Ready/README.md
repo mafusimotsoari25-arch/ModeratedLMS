@@ -1,29 +1,31 @@
-# Moderated LMS — runnable C++17 starter
+# Moderated Learning Management System (MLMS)
 
-This is a runnable, layered console starter aligned with the case study. It includes:
-- C++17 and CMake
-- SQLite persistence with prepared statements for data values
-- Password hashing with PBKDF2-HMAC-SHA256 using OpenSSL (salted, encoded hash; never plaintext)
-- Abstract `User` class, role subclasses and a `UserFactory`
-- `ILatePenaltyStrategy` / `StandardLatePenalty` Strategy pattern
-- `AuditRepository` (Repository/DAO pattern)
-- `NotificationService` using the Observer pattern
-- A service layer for a demonstration submission, mark, moderation and release flow
-- Unit tests for late penalties, password verification and role factory
-- SQLite schema for users, departments, courses, enrolments, assignments, extensions, submissions, versions, marks, audit log, and notifications
+A C++17 console application using a layered design, SQLite persistence, and OpenSSL password hashing. This implementation includes role-checked actions for Students, Lecturers, Heads of Department (HoDs), and Administrators.
 
-## Windows 11 setup (MSYS2 UCRT64)
-Install/update packages from the **MSYS2 UCRT64** terminal:
+## Features implemented
+
+- **Authentication:** username/password login; passwords are stored as salted PBKDF2-HMAC-SHA256 hashes, not plaintext.
+- **Role-based access:** service methods check both the user's database role and the role object. Students submit/resubmit and view released marks; assigned Lecturers create assignments, grant extensions, and mark submissions; HoDs approve/reject marks for release; Administrators create user accounts.
+- **Late penalty:** the system calculates late days from the latest submission version's timestamp and the applicable deadline. It deducts 10% of the maximum mark per late day for days 1–3, and gives zero after 3 days.
+- **Extensions:** an assigned Lecturer can grant or update a student's revised deadline and must provide a reason.
+- **Resubmissions:** a Student can add a new version before the applicable deadline. Previous versions remain in `submission_versions`; resubmission is blocked after marking/moderation/release.
+- **Moderation and release:** a mark is not visible to the Student until a HoD approves and releases it.
+- **Audit and notifications:** mark changes record actor, timestamp, previous/new final marks, and reason. Notifications are stored in SQLite.
+- **Persistence:** SQLite schema and prepared statements; data remains in `lms.db` between runs.
+
+## Requirements
+
+Windows 11 with MSYS2 UCRT64, GCC, CMake, Ninja, SQLite and OpenSSL development packages.
+
+Open **MSYS2 UCRT64** and install packages if needed:
 
 ```bash
-pacman -Syu
 pacman -S --needed mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja mingw-w64-ucrt-x86_64-sqlite3 mingw-w64-ucrt-x86_64-openssl
 ```
 
-If MSYS2 asks you to close the terminal during update, close it, reopen UCRT64, and repeat `pacman -Syu` if needed. Add `C:\msys64\ucrt64\bin` to Windows PATH, then open a new terminal.
+## Build, test, and run
 
-## Build and run
-Run these commands in **MSYS2 UCRT64**, from this project folder:
+Open MSYS2 UCRT64 in this project folder (the folder containing `CMakeLists.txt`) and run:
 
 ```bash
 cmake -S . -B build -G Ninja
@@ -32,19 +34,38 @@ ctest --test-dir build --output-on-failure
 ./build/lms.exe
 ```
 
-The executable creates `lms.db` in its current working directory. The demo adds a demo account/course/assignment/submission when it is run for the first time, demonstrates the submission -> marking -> HoD moderation -> release path, records a mark audit entry, and sends Observer notifications. It avoids duplicating the demo submission on later runs.
+The automated test suite checks password verification, the four roles, role access restrictions, late-penalty boundaries, extension use, resubmission rules, and mark release workflow.
+
+## Demo accounts
+
+On first run, the application creates demo accounts. For demonstration only:
+
+| Role | Username | Password |
+|---|---|---|
+| Student | `demo_student` | `Student123!` |
+| Lecturer | `demo_lecturer` | `Lecturer123!` |
+| HoD | `demo_hod` | `Hod123456!` |
+| Administrator | `demo_admin` | `Admin123456!` |
+
+The demo setup refreshes these four demo passwords each time the application starts. Do not use demo accounts for real student records. Replace/remove demo accounts before real deployment.
+
+## Using the console
+
+1. Start the program and choose `1 Login`.
+2. Sign in with one of the demo accounts above.
+3. Use the menu shown for that role. Assignment deadlines use `YYYY-MM-DD_HH:MM:SS` in the console (underscore in place of the space). Feedback/reasons are currently entered as one token.
+4. The Lecturer must be assigned to the course to create assignments, grant extensions, or mark submissions. The sample course (ID `1`) is assigned to the demo Lecturer and enrolled by the demo Student.
+5. Students can only see marks after a HoD releases them.
 
 ## Design mapping
-- Layered architecture: console presentation (`main.cpp`) -> application service (`LmsService`) -> repositories/database -> SQLite.
-- Strategy: `ILatePenaltyStrategy` and `StandardLatePenalty`.
-- Repository/DAO: `AuditRepository`; database setup in `Database`.
-- Observer: `NotificationService` and `INotificationObserver`.
-- Factory: `UserFactory` creates the correct role-specific `User` subclass.
-- Inheritance/polymorphism: abstract `User` and concrete Student/Lecturer/HoD/Administrator.
-- Audit: every mark update performed by the service is recorded with actor, time, old mark, new mark and reason.
 
-## Scope and limitations
-This is a working foundation and demo workflow, not a claim that every assessed requirement is finished. The console demo does not yet provide complete interactive account/course administration, secure login sessions, individual extension management UI, or comprehensive role-permission enforcement for every possible operation. Those must be completed and validated against the final SRS before submission. Do not use demo credentials or demo records for real student data.
+- Layered architecture: console presentation → `LmsService` → repository/database access → SQLite.
+- Inheritance/polymorphism and Factory: `User`, four role subclasses, and `UserFactory`.
+- Strategy: `ILatePenaltyStrategy` / `StandardLatePenalty`.
+- Repository/DAO: `AuditRepository`.
+- Observer: `NotificationService` / `INotificationObserver`.
+- Persistence: SQLite; input values use prepared statements.
 
-## Password security
-PBKDF2-HMAC-SHA256 is a password-based key derivation function provided by OpenSSL. This starter uses a random salt, a high iteration count, and constant-time comparison during verification. For a production deployment, review the iteration count against the school's hardware and follow current security guidance.
+## Limitations to disclose
+
+This is a coursework console implementation, not a production deployment. It has no file-upload UI, no password-reset flow, limited input formatting (single-token text fields), and no department-specific HoD assignment rules. Review the final SRS, test on the target Windows/MSYS2 environment, and remove demo data before submission.
