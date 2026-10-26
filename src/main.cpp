@@ -8,8 +8,7 @@ int main() {
         Database database("lms.db");
         database.initialiseSchema();
         LmsService service(database);
-        std::cout << "Moderated Learning Management System (demo)\n";
-        service.runDemonstration();
+        service.runApplication();
         return 0;
     } catch (const std::exception& ex) {
         std::cerr << "Application error: " << ex.what() << '\n';

@@ -2,6 +2,7 @@ build/
 cmake-build-*/
 *.exe
 *.o
+*.a
 *.db
 *.db-wal
 *.db-shm

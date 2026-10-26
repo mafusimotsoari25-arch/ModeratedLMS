@@ -12,7 +12,7 @@ void NotificationService::subscribe(INotificationObserver& observer) {
 
 void NotificationService::notifyUser(int userId, const std::string& message) {
     sqlite3_stmt* stmt = nullptr;
-    const char* sql = "INSERT INTO notifications(user_id, message) VALUES(?, ?);";
+    const char* sql = "INSERT INTO notification(user_id, message) VALUES(?, ?);";
     if (sqlite3_prepare_v2(database_.handle(), sql, -1, &stmt, nullptr) != SQLITE_OK)
         throw std::runtime_error(sqlite3_errmsg(database_.handle()));
     sqlite3_bind_int(stmt, 1, userId);

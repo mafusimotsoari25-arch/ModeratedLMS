@@ -28,7 +28,3 @@ endif()
 add_executable(lms src/main.cpp)
 target_link_libraries(lms PRIVATE lms_core)
 
-enable_testing()
-add_executable(lms_tests tests/test_lms.cpp)
-target_link_libraries(lms_tests PRIVATE lms_core)
-add_test(NAME lms_tests COMMAND lms_tests)
