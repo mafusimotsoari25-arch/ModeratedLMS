@@ -10,8 +10,8 @@
 
 | Artefact | Impact and required update |
 |---|---|
-| Requirement | Add FR-EXT-02: an assigned lecturer may set/replace one revised deadline for an assignment's active class; the system notifies enrolled students and displays the effective deadline in the student assignment list. |
-| Use case/activity diagram | Add “Extend deadline for whole class”; lecturer selects assignment, enters revised deadline/reason, system validates course assignment, stores extension, and notifies active enrolled students. |
+| Requirement | Add FR-EXT-02: an assigned lecturer may set or replace one revised deadline for an assignment's active class; the system notifies enrolled students and displays the effective deadline in the student assignment list. |
+| Use case/activity diagram | Add "Extend deadline for whole class"; lecturer selects assignment, enters revised deadline/reason, system validates course assignment, stores extension, and notifies active enrolled students. |
 | Sequence diagram | Add lecturer → LmsService → Database class-extension save, followed by NotificationService messages to enrolled students. |
 | Class design | Add `LmsService::grantClassExtension(...)`; existing `effectiveDeadline(...)` resolves individual extension first, then class extension, then original assignment deadline. |
 | Database | Add `class_extension` table with one class-wide record per assignment, revised deadline, granting lecturer, reason, timestamp, and foreign keys. Existing `extension` remains for student-specific exceptions. |
@@ -20,13 +20,15 @@
 | Unit/integration tests | Test class-extension persistence, authorization, class notifications, effective-deadline precedence, assignment-list display, and unchanged individual extension/submission/late-penalty/moderation workflows. |
 | Build/release | Update CMake target source only if new source files are introduced; document v1.1 and run the full existing suite. |
 
+**Design artefact status:** The repository contains the impact analysis and implementation documentation, but the UML diagrams and other design documents were not found in the project folder during the Phase 8 review. Their CR1 updates therefore still need to be completed or added to the repository.
+
 ## 3. Implementation summary — v1.1
 
 - Added `class_extension` to the SQLite schema. It is separate from `extension` so existing per-student extensions remain supported.
 - Added `LmsService::grantClassExtension`. Only a lecturer assigned to the assignment's course can use it.
 - The service creates or updates the class extension and sends a notification to every actively enrolled student in the assignment's course.
 - Effective deadline resolution is: **individual extension → class extension → original assignment deadline**. This allows a lecturer to grant an exception to one student without losing the class-wide deadline.
-- The lecturer menu now offers “Extend deadline for whole class”.
+- The lecturer menu now offers "Extend deadline for whole class".
 - Student assignment-list queries now show the effective deadline.
 - Updated the database schema test for the additional table.
 
@@ -40,19 +42,7 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-Required CR1 checks:
+**Final regression result:** 105 of 105 tests passed (100%).
 
-| Test ID | Test | Expected result |
-|---|---|---|
-| CR1-T01 | Assigned lecturer extends class deadline | Extension saved successfully |
-| CR1-T02 | Lecturer not assigned to course attempts extension | Request rejected |
-| CR1-T03 | Active enrolled students receive notifications | Each enrolled student receives a notification |
-| CR1-T04 | Student assignment list after class extension | Revised class deadline is displayed |
-| CR1-T05 | Student has an individual extension as well as class extension | Individual deadline takes precedence |
-| CR1-T06 | No extension exists | Original assignment deadline remains visible |
-| REG-T01 | Existing individual extension flow | Still works |
-| REG-T02 | Submission/resubmission and late penalty | Existing rules remain unchanged |
-| REG-T03 | Marking, HoD moderation and mark release | Existing behaviour remains unchanged |
-| REG-T04 | Password, user roles, database, audit and notification tests | Existing behaviour remains unchanged |
-
-**Evidence status:** The source and test configuration have been updated, but the test command must be run in the project's supported C++17/CMake environment before reporting a pass. Do not describe tests as passed until the command output confirms it.
+The final CTest run completed successfully in 78.93 seconds.
+The CMake configuration and build completed successfully.

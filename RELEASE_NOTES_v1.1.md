@@ -14,4 +14,13 @@ CR1 adds class-wide assignment deadline extensions.
 Added `class_extension`; existing `extension` records remain available.
 
 ## Verification
-Run the full CMake/CTest suite. See `PHASE8_CR1_V1_1.md` for the change-impact matrix and test plan. Test results must be taken from the actual run; this note does not claim an unexecuted suite passed.
+- CMake configuration completed successfully.
+- Build completed successfully.
+- Full regression suite: 105 of 105 tests passed (100%).
+- Final CTest run completed in 78.93 seconds.
+- Class-wide extension, deadline application, and individual-extension override tests passed.
+
+See `PHASE8_CR1_V1_1.md` for the change-impact analysis and test details.
+
+## Design artefacts
+The UML diagrams and other design documents were not found in the project folder during the Phase 8 review. Their CR1 updates still need to be completed or added to the repository.
