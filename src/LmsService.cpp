@@ -871,12 +871,15 @@ std::string LmsService::effectiveDeadline(
         "SELECT COALESCE("
         "(SELECT revised_deadline FROM extension "
         "WHERE assignment_id=? AND student_user_id=?),"
+        "(SELECT revised_deadline FROM class_extension "
+        "WHERE assignment_id=?),"
         "(SELECT deadline FROM assignment WHERE assignment_id=?))"
     );
 
     sqlite3_bind_int(s.get(), 1, assignmentId);
     sqlite3_bind_int(s.get(), 2, studentId);
     sqlite3_bind_int(s.get(), 3, assignmentId);
+    sqlite3_bind_int(s.get(), 4, assignmentId);
 
     if (sqlite3_step(s.get()) != SQLITE_ROW) {
         throw std::runtime_error("Assignment not found");
@@ -1085,6 +1088,97 @@ int LmsService::grantExtension(
     return static_cast<int>(
         sqlite3_last_insert_rowid(database_.handle())
     );
+}
+
+int LmsService::grantClassExtension(
+    const User& actor,
+    int assignmentId,
+    const std::string& revisedDeadline,
+    const std::string& reason
+) {
+    requireRole(actor, Role::Lecturer);
+
+    if (revisedDeadline.size() < 16 || reason.empty()) {
+        throw std::invalid_argument(
+            "A revised deadline and reason are required"
+        );
+    }
+
+    Statement assigned(
+        database_.handle(),
+        "SELECT COUNT(*) FROM assignment a "
+        "JOIN course_lecturer cl ON cl.course_id = a.course_id "
+        "WHERE a.assignment_id = ? AND cl.lecturer_user_id = ?"
+    );
+
+    sqlite3_bind_int(assigned.get(), 1, assignmentId);
+    sqlite3_bind_int(assigned.get(), 2, actor.id());
+
+    if (sqlite3_step(assigned.get()) != SQLITE_ROW ||
+        sqlite3_column_int(assigned.get(), 0) == 0) {
+        throw std::runtime_error(
+            "You are not assigned to this assignment's course"
+        );
+    }
+
+    Statement save(
+    database_.handle(),
+    "INSERT INTO class_extension "
+    "(assignment_id, revised_deadline, granted_by_user_id, reason) "
+    "VALUES (?, ?, ?, ?) "
+    "ON CONFLICT(assignment_id) DO UPDATE SET "
+    "revised_deadline = excluded.revised_deadline, "
+    "granted_by_user_id = excluded.granted_by_user_id, "
+    "reason = excluded.reason, "
+    "created_at = CURRENT_TIMESTAMP"
+    );
+
+    sqlite3_bind_int(save.get(), 1, assignmentId);
+    sqlite3_bind_text(
+        save.get(), 2, revisedDeadline.c_str(), -1, SQLITE_TRANSIENT
+    );
+    sqlite3_bind_int(save.get(), 3, actor.id());
+    sqlite3_bind_text(
+        save.get(), 4, reason.c_str(), -1, SQLITE_TRANSIENT
+    );
+
+    save.done();
+
+    Statement students(
+        database_.handle(),
+        "SELECT e.student_user_id FROM enrolment e "
+        "JOIN assignment a ON a.course_id = e.course_id "
+        "WHERE a.assignment_id = ? AND e.status = 'Active'"
+    );
+
+    sqlite3_bind_int(students.get(), 1, assignmentId);
+
+    while (sqlite3_step(students.get()) == SQLITE_ROW) {
+        const int studentId = sqlite3_column_int(students.get(), 0);
+
+        notifications_.notifyUser(
+            studentId,
+            "The class deadline for assignment " +
+            std::to_string(assignmentId) +
+            " was extended until " + revisedDeadline + "."
+        );
+    }
+
+    Statement savedId(
+        database_.handle(),
+        "SELECT class_extension_id FROM class_extension "
+        "WHERE assignment_id = ?"
+    );
+
+    sqlite3_bind_int(savedId.get(), 1, assignmentId);
+
+    if (sqlite3_step(savedId.get()) != SQLITE_ROW) {
+        throw std::runtime_error(
+            "Could not retrieve the saved class extension"
+        );
+    }
+
+    return sqlite3_column_int(savedId.get(), 0);
 }
 
 int LmsService::resubmitAssignment(
@@ -1704,12 +1798,17 @@ void LmsService::showAssignments(const User& actor) {
 
     const char* sql =
         actor.role() == Role::Student
-        ? "SELECT a.assignment_id,a.title,a.deadline,a.max_mark "
+        ? "SELECT a.assignment_id,a.title,COALESCE("
+          "(SELECT revised_deadline FROM extension x WHERE x.assignment_id=a.assignment_id AND x.student_user_id=?),"
+          "(SELECT revised_deadline FROM extension cx WHERE cx.assignment_id=a.assignment_id),"
+          "a.deadline),a.max_mark "
           "FROM assignment a "
           "JOIN enrolment e ON e.course_id=a.course_id "
           "WHERE e.student_user_id=? AND e.status='Active' "
           "ORDER BY a.assignment_id"
-        : "SELECT a.assignment_id,a.title,a.deadline,a.max_mark "
+        : "SELECT a.assignment_id,a.title,COALESCE("
+          "(SELECT revised_deadline FROM extension cx WHERE cx.assignment_id=a.assignment_id),"
+          "a.deadline),a.max_mark "
           "FROM assignment a "
           "JOIN course_lecturer cl ON cl.course_id=a.course_id "
           "WHERE cl.lecturer_user_id=? "
@@ -1717,9 +1816,14 @@ void LmsService::showAssignments(const User& actor) {
 
     Statement s(database_.handle(), sql);
 
-    sqlite3_bind_int(s.get(), 1, actor.id());
+    if (actor.role() == Role::Student) {
+        sqlite3_bind_int(s.get(), 1, actor.id());
+        sqlite3_bind_int(s.get(), 2, actor.id());
+    } else {
+        sqlite3_bind_int(s.get(), 1, actor.id());
+    }
 
-    std::cout << "\nAssignments:\n";
+    std::cout << "\nAssignments (extended deadlines are shown):\n";
 
     bool any = false;
 
@@ -1897,6 +2001,7 @@ void LmsService::runApplication() {
                         << "3 Resubmit "
                         << "4 Released mark "
                         << "5 Notifications "
+                        << "6 Extend deadline for whole class "
                         << "0 Logout\n";
                 }
                 else if (user->role() == Role::Lecturer) {
@@ -2047,6 +2152,20 @@ void LmsService::runApplication() {
                             );
 
                             std::cout << "Extension saved.\n";
+                        }
+                        else if (c == 6) {
+                            int aid;
+                            std::string deadline, reason;
+                            std::cout << "Assignment ID: ";
+                            std::cin >> aid;
+                            std::cout << "Revised deadline YYYY-MM-DD_HH:MM:SS: ";
+                            std::cin >> deadline;
+                            std::replace(deadline.begin(), deadline.end(), '_', ' ');
+                            std::cout << "Reason (use underscores for spaces): ";
+                            std::cin >> reason;
+                            std::replace(reason.begin(), reason.end(), '_', ' ');
+                            grantClassExtension(*user, aid, deadline, reason);
+                            std::cout << "Class extension saved and students notified.\\n";
                         }
                         else if (c == 3) {
                             int sid;

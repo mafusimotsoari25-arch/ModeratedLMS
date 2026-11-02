@@ -275,11 +275,11 @@ TEST(DatabaseTest, CreatesDatabaseSuccessfully) {
     });
 }
 
-TEST(DatabaseTest, CreatesAllFifteenTables) {
+TEST(DatabaseTest, CreatesAllSixteenTables) {
     Database database(":memory:");
     database.initialiseSchema();
 
-    EXPECT_EQ(getTableCount(database), 15);
+    EXPECT_EQ(getTableCount(database), 16);
 }
 
 TEST(DatabaseTest, SchemaCanBeInitialisedMoreThanOnce) {
@@ -290,7 +290,7 @@ TEST(DatabaseTest, SchemaCanBeInitialisedMoreThanOnce) {
         database.initialiseSchema();
     });
 
-    EXPECT_EQ(getTableCount(database), 15);
+    EXPECT_EQ(getTableCount(database), 16);
 }
 
 // ------------------------------------------------------------
@@ -1424,6 +1424,63 @@ TEST_F(AssignmentWorkflowTest, LecturerCanUpdateExistingExtension) {
             "2099-10-27 23:59:59", "Updated extension"
         )
     );
+}
+
+TEST_F(AssignmentWorkflowTest, LecturerCanGrantClassWideExtension) {
+    EXPECT_GT(service.grantClassExtension(
+        *lecturer, assignmentId,
+        "2099-10-25 23:59:59", "Class deadline update"
+    ), 0);
+}
+
+TEST_F(AssignmentWorkflowTest, ClassExtensionIsUsedForSubmissionDeadline) {
+    service.grantClassExtension(
+        *lecturer, assignmentId,
+        "2099-10-25 23:59:59", "Class deadline update"
+    );
+
+    // This is after the original deadline but before the class extension.
+    const int submissionId = service.submitAssignment(
+        *student, assignmentId, "Work submitted within extension",
+        "2099-10-22 12:00:00"
+    );
+    EXPECT_GT(submissionId, 0);
+
+    sqlite3_stmt* statement = nullptr;
+    ASSERT_EQ(sqlite3_prepare_v2(
+        database.handle(),
+        "SELECT is_late FROM submission WHERE submission_id=?",
+        -1, &statement, nullptr), SQLITE_OK);
+    sqlite3_bind_int(statement, 1, submissionId);
+    ASSERT_EQ(sqlite3_step(statement), SQLITE_ROW);
+    EXPECT_EQ(sqlite3_column_int(statement, 0), 0);
+    sqlite3_finalize(statement);
+}
+
+TEST_F(AssignmentWorkflowTest, IndividualExtensionOverridesClassExtension) {
+    service.grantClassExtension(
+        *lecturer, assignmentId,
+        "2099-10-25 23:59:59", "Class deadline update"
+    );
+    service.grantExtension(
+        *lecturer, assignmentId, studentId,
+        "2099-10-21 23:59:59", "Individual exception"
+    );
+
+    const int submissionId = service.submitAssignment(
+        *student, assignmentId, "Work submitted after individual deadline",
+        "2099-10-22 12:00:00"
+    );
+
+    sqlite3_stmt* statement = nullptr;
+    ASSERT_EQ(sqlite3_prepare_v2(
+        database.handle(),
+        "SELECT is_late FROM submission WHERE submission_id=?",
+        -1, &statement, nullptr), SQLITE_OK);
+    sqlite3_bind_int(statement, 1, submissionId);
+    ASSERT_EQ(sqlite3_step(statement), SQLITE_ROW);
+    EXPECT_EQ(sqlite3_column_int(statement, 0), 1);
+    sqlite3_finalize(statement);
 }
 
 // ------------------------------------------------------------

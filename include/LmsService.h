@@ -60,6 +60,10 @@ public:
                        const std::string& revisedDeadline,
                        const std::string& reason);
 
+    int grantClassExtension(const User& actor, int assignmentId,
+                            const std::string& revisedDeadline,
+                            const std::string& reason);
+
     int resubmitAssignment(const User& actor, int assignmentId,
                            const std::string& content,
                            const std::string& submittedAt = "",
