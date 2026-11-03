@@ -1,0 +1,105 @@
+================================================
+  NLOC    CCN   token  PARAM  length  location  
+------------------------------------------------
+      19      5    200      5      19 AuditRepository::recordMarkChange@4-22@src/AuditRepository.cpp
+      11      4     84      1      11 Database::Database@4-14@src/Database.cpp
+       1      2     16      0       1 Database::~Database@16-16@src/Database.cpp
+       9      3     78      1       9 Database::execute@18-26@src/Database.cpp
+     153      1     13      0     153 Database::initialiseSchema@28-180@src/Database.cpp
+       8      6     82      3       8 StandardLatePenalty::finalMark@5-12@src/LatePenalty.cpp
+       5      2     50      2       5 Statement::Statement@24-28@src/LmsService.cpp
+       3      2     14      0       3 Statement::~Statement@30-32@src/LmsService.cpp
+       3      1      9      0       3 Statement::get@34-36@src/LmsService.cpp
+       5      2     27      0       5 Statement::done@38-42@src/LmsService.cpp
+       9      5     53      1      10 roleText@49-58@src/LmsService.cpp
+       9      2     68      0      14 nowText@60-73@src/LmsService.cpp
+      16      3    104      1      21 parseTime@75-95@src/LmsService.cpp
+      11      2     62      2      13 daysLateBetween@97-109@src/LmsService.cpp
+      28      4    169      4      36 copySubmissionFile@111-146@src/LmsService.cpp
+       6      2     38      2       7 columnText@148-154@src/LmsService.cpp
+       5      1     25      1       5 LmsService::LmsService@158-162@src/LmsService.cpp
+      16      6    125      1      21 LmsService::roleForUser@164-184@src/LmsService.cpp
+      11      3     46      2      11 LmsService::requireRole@186-196@src/LmsService.cpp
+      12      3     78      2      13 LmsService::requireAnyRole@198-210@src/LmsService.cpp
+       8      2     45      0       9 LmsService::hasAdministrator@212-220@src/LmsService.cpp
+      37      5    177      2      45 LmsService::bootstrapAdministrator@222-266@src/LmsService.cpp
+      56      2    221      0      69 LmsService::seedDemoData@268-336@src/LmsService.cpp
+      24      3    172      2      29 LmsService::login@338-366@src/LmsService.cpp
+      46      5    217      2      56 LmsService::registerStudent@368-423@src/LmsService.cpp
+      26      3    132      3      32 LmsService::enrolStudent@425-456@src/LmsService.cpp
+      20      2    101      2      25 LmsService::createDepartment@458-482@src/LmsService.cpp
+      37      5    213      4      47 LmsService::createCourse@484-530@src/LmsService.cpp
+      32      3    151      3      38 LmsService::assignLecturer@532-569@src/LmsService.cpp
+      30      3    151      3      36 LmsService::assignHeadOfDepartment@571-606@src/LmsService.cpp
+      46     10    227      3      55 LmsService::setUserActive@608-662@src/LmsService.cpp
+      53      6    384      1      66 LmsService::listAdminData@664-729@src/LmsService.cpp
+      44      4    227      4      56 LmsService::createUser@731-786@src/LmsService.cpp
+      47      6    273      5      57 LmsService::createAssignment@788-844@src/LmsService.cpp
+      16      2     79      2      18 LmsService::isEnrolled@846-863@src/LmsService.cpp
+      19      2    102      2      22 LmsService::effectiveDeadline@865-886@src/LmsService.cpp
+      97     10    583      5     124 LmsService::submitAssignment@888-1011@src/LmsService.cpp
+      63      6    316      5      76 LmsService::grantExtension@1013-1088@src/LmsService.cpp
+     114     12    667      5     143 LmsService::resubmitAssignment@1090-1232@src/LmsService.cpp
+     120     11    608      4     148 LmsService::markSubmission@1234-1381@src/LmsService.cpp
+      99      6    511      4     126 LmsService::moderateAndRelease@1383-1508@src/LmsService.cpp
+      94      8    438      4     113 LmsService::changeMark@1510-1622@src/LmsService.cpp
+      25      3    151      1      32 LmsService::showStudentMarks@1624-1655@src/LmsService.cpp
+      30      3    169      1      37 LmsService::showPendingModeration@1657-1693@src/LmsService.cpp
+      38      4    198      1      46 LmsService::showAssignments@1695-1740@src/LmsService.cpp
+      37      4    204      1      46 LmsService::showNotifications@1742-1787@src/LmsService.cpp
+     426     63   2058      0     529 LmsService::runApplication@1789-2317@src/LmsService.cpp
+      12      2     66      0      12 main@6-17@src/main.cpp
+       3      1     35      2       3 ConsoleNotificationObserver::onNotification@5-7@src/Notification.cpp
+       3      1     18      1       3 NotificationService::subscribe@9-11@src/Notification.cpp
+      12      4    146      2      12 NotificationService::notifyUser@13-24@src/Notification.cpp
+       6      2     80      2       6 toHex@16-21@src/PasswordService.cpp
+      13      4    140      1      13 fromHex@22-34@src/PasswordService.cpp
+      10      2    114      2      10 derive@35-44@src/PasswordService.cpp
+       9      3    150      1       9 PasswordService::hashPassword@47-55@src/PasswordService.cpp
+      23     13    333      2      23 PasswordService::verifyPassword@57-79@src/PasswordService.cpp
+       8      5    109      3       8 UserFactory::create@4-11@src/UserFactory.cpp
+       1      1     13      1       1 AuditRepository::AuditRepository@8-8@include/AuditRepository.h
+       1      1      9      0       1 Database::handle@11-11@include/Database.h
+       1      1     13      1       1 NotificationService::NotificationService@19-19@include/Notification.h
+       1      1     27      2       1 User::User@9-9@include/User.h
+       1      1      9      0       1 User::id@11-11@include/User.h
+       1      1      9      0       1 User::username@12-12@include/User.h
+       1      1     12      0       1 Student::role@23-23@include/User.h
+       1      1     10      0       1 Student::roleName@24-24@include/User.h
+       1      1     12      0       1 Lecturer::role@29-29@include/User.h
+       1      1     10      0       1 Lecturer::roleName@30-30@include/User.h
+       1      1     12      0       1 HeadOfDepartment::role@35-35@include/User.h
+       1      1     10      0       1 HeadOfDepartment::roleName@36-36@include/User.h
+       1      1     12      0       1 Administrator::role@41-41@include/User.h
+       1      1     10      0       1 Administrator::roleName@42-42@include/User.h
+16 file analyzed.
+==============================================================
+NLOC    Avg.NLOC  AvgCCN  Avg.token  function_cnt    file
+--------------------------------------------------------------
+     21      19.0     5.0      200.0         1     src/AuditRepository.cpp
+    176      43.5     2.5       47.8         4     src/Database.cpp
+     11       8.0     6.0       82.0         1     src/LatePenalty.cpp
+   1847      44.5     5.6      235.2        41     src/LmsService.cpp
+     16      12.0     2.0       66.0         1     src/main.cpp
+     21       6.0     2.0       66.3         3     src/Notification.cpp
+     75      12.2     4.8      163.4         5     src/PasswordService.cpp
+     10       8.0     5.0      109.0         1     src/UserFactory.cpp
+     12       1.0     1.0       13.0         1     include/AuditRepository.h
+     14       1.0     1.0        9.0         1     include/Database.h
+      9       0.0     0.0        0.0         0     include/LatePenalty.h
+     70       0.0     0.0        0.0         0     include/LmsService.h
+     21       1.0     1.0       13.0         1     include/Notification.h
+      7       0.0     0.0        0.0         0     include/PasswordService.h
+     39       1.0     1.0       12.1        11     include/User.h
+      8       0.0     0.0        0.0         0     include/UserFactory.h
+
+===========================================================================================================
+!!!! Warnings (cyclomatic_complexity > 15 or length > 1000 or nloc > 1000000 or parameter_count > 100) !!!!
+================================================
+  NLOC    CCN   token  PARAM  length  location  
+------------------------------------------------
+     426     63   2058      0     529 LmsService::runApplication@1789-2317@src/LmsService.cpp
+==========================================================================================
+Total nloc   Avg.NLOC  AvgCCN  Avg.token   Fun Cnt  Warning cnt   Fun Rt   nloc Rt
+------------------------------------------------------------------------------------------
+      2357      30.1     4.3      161.6       71            1      0.01    0.20

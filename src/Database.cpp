@@ -97,6 +97,17 @@ void Database::initialiseSchema() {
       FOREIGN KEY(student_user_id) REFERENCES user(user_id),
       FOREIGN KEY(granted_by_user_id) REFERENCES user(user_id)
     );
+    
+    CREATE TABLE IF NOT EXISTS class_extension (
+      class_extension_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      assignment_id INTEGER NOT NULL UNIQUE,
+      revised_deadline TEXT NOT NULL,
+      granted_by_user_id INTEGER NOT NULL,
+      reason TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(assignment_id) REFERENCES assignment(assignment_id),
+      FOREIGN KEY(granted_by_user_id) REFERENCES user(user_id)
+   );
     CREATE TABLE IF NOT EXISTS submission (
       submission_id INTEGER PRIMARY KEY AUTOINCREMENT,
       assignment_id INTEGER NOT NULL,
