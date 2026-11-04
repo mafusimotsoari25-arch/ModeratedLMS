@@ -7,3 +7,4 @@ cmake-build-*/
 *.db-wal
 *.db-shm
 .vscode/
+videos/MLMS_Whole_System_Presentation.mp4
