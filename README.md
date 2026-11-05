@@ -6,9 +6,9 @@ Offline C++17 console application using SQLite and OpenSSL. User accounts are cr
 - First-run setup for the initial Administrator.
 - Administrator creates accounts, departments, courses, lecturer assignments, HoD assignments, and student enrolments.
 - Passwords are hashed using OpenSSL-backed password service; never store plain-text passwords.
-- Assignment creation, deadlines, extension records, resubmission versions, marking, moderation, mark release, notifications, and mark audit records.
+- Assignment creation, deadlines, individual and class-wide extension records (v1.1), resubmission versions, marking, moderation, mark release, notifications, and mark audit records.
 - File submissions are copied into `submissions/assignment_<id>/student_<id>/` and the managed copy path is stored in SQLite. Keep the `submissions/` folder with the database when backing up or moving the project.
-- Local SQLite database is `lms.db`. The application does not require internet or email for its core workflow.
+- Local SQLite database is `lms.db`. The application does not require internet or email for its core workflow. The student assignment list resolves the effective deadline using individual extension first, class-wide extension second, and the original assignment deadline last.
 
 ## Requirements on Windows
 Install MSYS2 and use the **MSYS2 UCRT64** terminal. Install packages:
@@ -77,3 +77,6 @@ Do not upload real student information, passwords, or a database containing priv
 
 ## Important scope note
 This is a local console application, not a web application. On a single computer, the local database and managed submission files are available to users of that installation. Separate computers would need a properly designed school local-network server/shared-storage setup. Build success alone does not prove every workflow has been fully tested.
+
+## Documentation package
+Role-specific student, lecturer, HoD and administrator manuals, the technician installation guide, WBS/risk supplement, system/acceptance test record, traceability matrix, professional issues discussion and v1.0 release notes are included in this project package. Formal system/acceptance outcomes and target-machine installation results must be recorded after actual execution.

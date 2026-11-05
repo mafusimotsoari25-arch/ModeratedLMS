@@ -7,7 +7,7 @@ Git is used to manage source-code versions, track changes and maintain the histo
 
 The project uses a feature-branch workflow.
 
-- **master:** Contains the stable version of the application.
+- **main:** Contains the stable version of the application.
 - **feature branches:** Used to develop individual features or improvements.
 - **Pull requests:** Used to review and test changes before merging them into master.
 
@@ -31,3 +31,6 @@ Stable versions are identified using Git tags. The release tag is created after 
 ## 6. Repository
 
 GitHub repository: https://github.com/mafusimotsoari25-arch/ModeratedLMS
+
+## 7. Branch and workflow alignment
+The supplied repository snapshot has `main` as the checked-out branch. The GitHub Actions workflow in this package therefore targets `main` for push and pull-request events. If the repository default branch is deliberately changed to `master`, update both this document and the workflow together.

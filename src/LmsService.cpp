@@ -1800,14 +1800,14 @@ void LmsService::showAssignments(const User& actor) {
         actor.role() == Role::Student
         ? "SELECT a.assignment_id,a.title,COALESCE("
           "(SELECT revised_deadline FROM extension x WHERE x.assignment_id=a.assignment_id AND x.student_user_id=?),"
-          "(SELECT revised_deadline FROM extension cx WHERE cx.assignment_id=a.assignment_id),"
+          "(SELECT revised_deadline FROM class_extension cx WHERE cx.assignment_id=a.assignment_id),"
           "a.deadline),a.max_mark "
           "FROM assignment a "
           "JOIN enrolment e ON e.course_id=a.course_id "
           "WHERE e.student_user_id=? AND e.status='Active' "
           "ORDER BY a.assignment_id"
         : "SELECT a.assignment_id,a.title,COALESCE("
-          "(SELECT revised_deadline FROM extension cx WHERE cx.assignment_id=a.assignment_id),"
+          "(SELECT revised_deadline FROM class_extension cx WHERE cx.assignment_id=a.assignment_id),"
           "a.deadline),a.max_mark "
           "FROM assignment a "
           "JOIN course_lecturer cl ON cl.course_id=a.course_id "
@@ -1817,8 +1817,8 @@ void LmsService::showAssignments(const User& actor) {
     Statement s(database_.handle(), sql);
 
     if (actor.role() == Role::Student) {
-        sqlite3_bind_int(s.get(), 1, actor.id());
-        sqlite3_bind_int(s.get(), 2, actor.id());
+        sqlite3_bind_int(s.get(), 1, actor.id()); // individual extension
+        sqlite3_bind_int(s.get(), 2, actor.id()); // active enrolment
     } else {
         sqlite3_bind_int(s.get(), 1, actor.id());
     }
